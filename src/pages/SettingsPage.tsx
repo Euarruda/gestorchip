@@ -1,7 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { useChip } from '@/contexts/ChipContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +11,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Save, X, Palette, Settings } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Palette, Settings, Webhook } from 'lucide-react';
 import { toast } from 'sonner';
 
 const SettingsPage = () => {
   const { tags, functions, addTag, updateTag, deleteTag, addFunction, updateFunction, deleteFunction } = useChip();
+  const { user } = useAuth();
   
   const [newTag, setNewTag] = useState({ name: '', color: '#6b7280' });
   const [newFunction, setNewFunction] = useState({ name: '' });
@@ -21,6 +24,62 @@ const SettingsPage = () => {
   const [editingFunction, setEditingFunction] = useState<any>(null);
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [isFunctionDialogOpen, setIsFunctionDialogOpen] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [isLoadingWebhook, setIsLoadingWebhook] = useState(false);
+
+  // Carregar webhook URL quando o componente é montado
+  useEffect(() => {
+    if (user) {
+      loadWebhookUrl();
+    }
+  }, [user]);
+
+  const loadWebhookUrl = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('webhook_url')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao carregar webhook:', error);
+        return;
+      }
+
+      if (data?.webhook_url) {
+        setWebhookUrl(data.webhook_url);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar webhook:', error);
+    }
+  };
+
+  const handleSaveWebhook = async () => {
+    if (!webhookUrl.trim()) {
+      toast.error('URL do webhook é obrigatória');
+      return;
+    }
+
+    setIsLoadingWebhook(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ webhook_url: webhookUrl })
+        .eq('id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Webhook configurado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar webhook:', error);
+      toast.error('Erro ao salvar webhook. Tente novamente.');
+    } finally {
+      setIsLoadingWebhook(false);
+    }
+  };
 
   const predefinedColors = [
     '#10b981', '#f59e0b', '#ef4444', '#7c2d12', '#3b82f6', 
@@ -100,7 +159,7 @@ const SettingsPage = () => {
         </div>
 
         <Tabs defaultValue="tags" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 h-auto">
+          <TabsList className="grid w-full grid-cols-3 h-auto">
             <TabsTrigger value="tags" className="flex items-center gap-2 py-3">
               <Palette className="h-4 w-4" />
               <span className="hidden sm:inline">Tags/Status</span>
@@ -109,6 +168,10 @@ const SettingsPage = () => {
             <TabsTrigger value="functions" className="flex items-center gap-2 py-3">
               <Settings className="h-4 w-4" />
               <span>Funções</span>
+            </TabsTrigger>
+            <TabsTrigger value="webhook" className="flex items-center gap-2 py-3">
+              <Webhook className="h-4 w-4" />
+              <span>Webhook</span>
             </TabsTrigger>
           </TabsList>
           
@@ -367,6 +430,62 @@ const SettingsPage = () => {
                       )}
                     </Card>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Webhook Tab */}
+          <TabsContent value="webhook" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuração de Webhook</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Configure o webhook para receber notificações de eventos do sistema
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="webhookUrl">URL do Webhook</Label>
+                  <Input
+                    id="webhookUrl"
+                    type="url"
+                    placeholder="https://seu-webhook.com/endpoint"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Esta URL receberá notificações quando houver mudanças de status nos chips
+                  </p>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button 
+                    onClick={handleSaveWebhook}
+                    disabled={isLoadingWebhook}
+                    className="flex-1"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isLoadingWebhook ? 'Salvando...' : 'Salvar Webhook'}
+                  </Button>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-medium mb-2">Exemplo de Payload</h4>
+                  <div className="bg-muted p-3 rounded-md">
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
+{`{
+  "action": "chip_status_changed",
+  "chip": {
+    "id": "123",
+    "name": "Chip Vendas 01",
+    "status": "Ativo",
+    "function": "Vendas"
+  },
+  "timestamp": "2024-01-15T10:30:00Z"
+}`}
+                    </pre>
+                  </div>
                 </div>
               </CardContent>
             </Card>

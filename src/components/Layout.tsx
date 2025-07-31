@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useChip } from '@/contexts/ChipContext';
-import { Bell, Home, Plus, Settings, User, Menu, X, Sun, Moon, Microchip } from 'lucide-react';
+import { Bell, Home, Plus, Settings, User, Menu, X, Sun, Moon, Microchip, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -25,6 +26,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, toggleTheme } = useUser();
+  const { signOut } = useAuth();
   const { notifications, markNotificationAsRead } = useChip();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -155,6 +157,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <Sun className="mr-2 h-4 w-4" />
           )}
           <span>{user.theme === 'light' ? 'Tema Escuro' : 'Tema Claro'}</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={signOut}>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Sair</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
