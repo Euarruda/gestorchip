@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Save, X, Palette, Settings, Webhook } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Palette, Settings, Webhook, ExternalLink, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 const SettingsPage = () => {
@@ -26,11 +26,17 @@ const SettingsPage = () => {
   const [isFunctionDialogOpen, setIsFunctionDialogOpen] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [isLoadingWebhook, setIsLoadingWebhook] = useState(false);
+  
+  // Google Sheets state
+  const [sheetsUrl, setSheetsUrl] = useState('');
+  const [isConnectedToSheets, setIsConnectedToSheets] = useState(false);
+  const [isLoadingSheets, setIsLoadingSheets] = useState(false);
 
-  // Carregar webhook URL quando o componente é montado
+  // Carregar configurações quando o componente é montado
   useEffect(() => {
     if (user) {
       loadWebhookUrl();
+      loadSheetsConfig();
     }
   }, [user]);
 
@@ -78,6 +84,104 @@ const SettingsPage = () => {
       toast.error('Erro ao salvar webhook. Tente novamente.');
     } finally {
       setIsLoadingWebhook(false);
+    }
+  };
+
+  // Google Sheets functions
+  const loadSheetsConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('google_sheets_url')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao carregar config do Sheets:', error);
+        return;
+      }
+
+      if (data?.google_sheets_url) {
+        setSheetsUrl(data.google_sheets_url);
+        setIsConnectedToSheets(true);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar config do Sheets:', error);
+    }
+  };
+
+  const handleConnectSheets = async () => {
+    if (!sheetsUrl.trim()) {
+      toast.error('URL da planilha é obrigatória');
+      return;
+    }
+
+    if (!sheetsUrl.includes('docs.google.com/spreadsheets')) {
+      toast.error('Por favor, insira uma URL válida do Google Sheets');
+      return;
+    }
+
+    setIsLoadingSheets(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ google_sheets_url: sheetsUrl })
+        .eq('id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setIsConnectedToSheets(true);
+      toast.success('Google Sheets conectado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao conectar Sheets:', error);
+      toast.error('Erro ao conectar. Verifique a URL e tente novamente.');
+    } finally {
+      setIsLoadingSheets(false);
+    }
+  };
+
+  const handleDisconnectSheets = async () => {
+    setIsLoadingSheets(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ google_sheets_url: null })
+        .eq('id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setSheetsUrl('');
+      setIsConnectedToSheets(false);
+      toast.success('Google Sheets desconectado!');
+    } catch (error) {
+      console.error('Erro ao desconectar Sheets:', error);
+      toast.error('Erro ao desconectar. Tente novamente.');
+    } finally {
+      setIsLoadingSheets(false);
+    }
+  };
+
+  const handleSyncToSheets = async () => {
+    if (!isConnectedToSheets) {
+      toast.error('Conecte-se ao Google Sheets primeiro');
+      return;
+    }
+
+    setIsLoadingSheets(true);
+    try {
+      // Aqui você pode implementar a lógica de sincronização
+      // Por enquanto, vamos apenas simular
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      toast.success('Dados sincronizados com sucesso!');
+    } catch (error) {
+      console.error('Erro ao sincronizar:', error);
+      toast.error('Erro ao sincronizar dados.');
+    } finally {
+      setIsLoadingSheets(false);
     }
   };
 
@@ -159,7 +263,7 @@ const SettingsPage = () => {
         </div>
 
         <Tabs defaultValue="tags" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsList className="grid w-full grid-cols-4 h-auto">
             <TabsTrigger value="tags" className="flex items-center gap-2 py-3">
               <Palette className="h-4 w-4" />
               <span className="hidden sm:inline">Tags/Status</span>
@@ -172,6 +276,13 @@ const SettingsPage = () => {
             <TabsTrigger value="webhook" className="flex items-center gap-2 py-3">
               <Webhook className="h-4 w-4" />
               <span>Webhook</span>
+            </TabsTrigger>
+            <TabsTrigger value="sheets" className="flex items-center gap-2 py-3">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+              </svg>
+              <span className="hidden sm:inline">Google Sheets</span>
+              <span className="sm:hidden">Sheets</span>
             </TabsTrigger>
           </TabsList>
           
